@@ -1,0 +1,28 @@
+==========================VVMusic==================================
+
+
+--------------------CONFIGURANDO_O_PROJETO-------------------------
+
+git config --global user.name CapivaraCar1oca
+git config --global user.email vitorhenriquemartins05@gmail.com
+
+--------------------RODANDO_O_PROJETO------------------------------
+cd VVMusic
+
+npm i
+
+npx expo start --localhost --android
+
+--------------------CRIANDO_O_PROJETO------------------------------
+
+npx create-expo-app@latest VVMusic --template blank
+
+--------------------PACOTES----------------------------------------
+
+ npx expo install react-dom react-native-web @expo/metro-runtime
+
+ npx expo install @react-native-community/slider
+
+  npx expo install expo-av
+
+-------------------------------------------------------------------
