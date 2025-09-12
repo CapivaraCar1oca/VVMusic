@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Animated, Dimensions, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,19 +8,23 @@ import songs from './model/data';
 const { width, height } = Dimensions.get('window');
 
 export default function App() {
+  const [sound, setSound] = useState(null);
+  const [songIndex, setSongIndex] = useState(0);
+  const [songStatus, setSongStatus] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
+
+  const songSlider = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const listener = scrollX.addListener(({ value }) => {
-      console.log(`ScrollX : ${value}`);
+    scrollX.addListener(({value}) => {
       const index = Math.round(value / width);
-      console.log(index);
+      setSongIndex(index);
+      //console.log(`ScrollX : ${value}`);
+      //console.log(index);
     });
-
-    return () => {
-      scrollX.removeListener(listener);
-    };
-  }, []);
+}, []);
 
   const renderSongs = ({ item }) => {
     return (
@@ -52,10 +56,10 @@ export default function App() {
 
         <View>
           <Text style={[styles.songContent, styles.songTitle]}>
-            Nome da Música
+            {songs[songIndex].title}
           </Text>
           <Text style={[styles.songContent, styles.songArtist]}>
-            Autor da Música
+            {songs[songIndex].artist}
           </Text>
         </View>
 
@@ -81,7 +85,7 @@ export default function App() {
             <Ionicons name='play-skip-back-outline' size={35} color='#FFD369' />
           </TouchableOpacity>
           <TouchableOpacity>
-            <Ionicons name='pause-circle' size={75} color='#FFD369' />
+            <Ionicons name={isPlaying ? 'pause-circle' : 'play-circle'} size={75} color='#FFD369' />
           </TouchableOpacity>
           <TouchableOpacity>
             <Ionicons name='play-skip-forward-outline' size={35} color='#FFD369' />
@@ -192,6 +196,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '60%',
-    marginTop: 10,
+    marginVertical: 25,
   }
 });
