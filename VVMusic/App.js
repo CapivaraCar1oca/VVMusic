@@ -19,13 +19,15 @@ export default function App() {
   const scrollX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    scrollX.addListener(({value}) => {
+    const listener = scrollX.addListener(({ value }) => {
       const index = Math.round(value / width);
       setSongIndex(index);
-      //console.log(`ScrollX : ${value}`);
-      //console.log(index);
     });
-}, []);
+
+    return () => {
+      scrollX.removeListener(listener);
+    };
+  }, []);
 
   const renderSongs = ({ item }) => {
     return (
@@ -38,25 +40,38 @@ export default function App() {
   };
 
   const loadSound = async () => {
-    const { sound } = await Audio.Sound.create.Async(songs[songIndex].url);
-    setSound(sound);
-    const status = await sound.getStatusAsync();
-    status.isLooping = isLooping;
-    await sound.setIsLooping(isLooping);
-    setSongStatus(status);
-    setIsPlaying(false);
-  }
+    try {
+      const { sound: newSound } = await Audio.Sound.createAsync(songs[songIndex].url);
+      await newSound.setIsLoopingAsync(isLooping);
+      const status = await newSound.getStatusAsync();
+      setSound(newSound);
+      setSongStatus(status);
+      setIsPlaying(false);
+    } catch (error) {
+      console.log('Erro ao carregar som:', error);
+    }
+  };
 
   useEffect(() => {
-    if (sound) {
-      sound.unloadAsync();
-    }
-    loadSound();
+    let isMounted = true;
+
+    const setupSound = async () => {
+      if (sound) {
+        await sound.unloadAsync();
+      }
+      if (isMounted) {
+        await loadSound();
+      }
+    };
+
+    setupSound();
+
     return () => {
+      isMounted = false;
       if (sound) {
         sound.unloadAsync();
       }
-    }
+    };
   }, [songIndex]);
 
   const play = async () => {
@@ -64,14 +79,14 @@ export default function App() {
       setIsPlaying(true);
       await sound.playAsync();
     }
-  }
+  };
 
   const pause = async () => {
     if (sound) {
       setIsPlaying(false);
       await sound.pauseAsync();
     }
-  }
+  };
 
   const handlePlayPause = async () => {
     if (isPlaying) {
@@ -79,18 +94,52 @@ export default function App() {
     } else {
       await play();
     }
-  }
+  };
 
   const stop = async () => {
     if (sound) {
       await sound.stopAsync();
-      sound.unloadAsync();
+      await sound.unloadAsync();
       await loadSound();
+    }
+  };
+
+  const skipToPrevious = () => {
+    if (songIndex > 0) {
+      songSlider.current.scrollToOffset({
+        offset: (songIndex - 1) * width,
+        animated: true,
+      });
+    }
+  };
+
+  const skipToNext = () => {
+    if (songIndex < songs.length - 1) {
+      songSlider.current.scrollToOffset({
+        offset: (songIndex + 1) * width,
+        animated: true,
+      });
+    }
+  };
+
+  const updatePosition = async () => {
+    if (sound && isPlaying) {
+      const status = await sound.getStatusAsync();
+      setSongStatus(status);
+      if (status.positionMillis == status.durationMillis) {
+        if (!isLooping) await stop();
+      }
     }
   }
 
-  const skipToPrevious = () => {
+  useEffect(() => {
+    const intervalId = setInterval(updatePosition, 500);
+    return () => clearInterval(intervalId)
+  }, [sound, isPlaying])
 
+  const repeat = async (value) => {
+    setIsLooping(value);
+    await sound.setIsLoopingAsync(value);
   }
 
   return (
@@ -98,6 +147,7 @@ export default function App() {
       <View style={styles.main}>
 
         <Animated.FlatList
+          ref={songSlider}
           data={songs}
           renderItem={renderSongs}
           keyExtractor={item => item.id}
@@ -123,28 +173,38 @@ export default function App() {
         <View>
           <Slider
             style={styles.progressBar}
-            value={10}
+            value={songStatus ? songStatus.positionMillis : 0}
             minimumValue={0}
-            maximumValue={100}
+            maximumValue={songStatus ? songStatus.durationMillis : 0}
             thumbTintColor='#FFD369'
             minimumTrackTintColor='#FFD396'
             maximumTrackTintColor='#fff'
-            onSlidingComplete={() => { }}
+            onSlidingComplete={(value) => {
+              sound.setPositionAsync(value)
+            }}
           />
           <View style={styles.progressLevelDuration}>
-            <Text style={styles.progressLabelText}>00:00</Text>
-            <Text style={styles.progressLabelText}>00:00</Text>
+            <Text style={styles.progressLabelText}>
+              {songStatus ? (
+                `${Math.floor(songStatus.positionMillis / 1000 / 60)}:${String(Math.floor(songStatus.positionMillis / 1000 % 60)).padStart(2,"0")}`
+                ) : "00:00"}
+            </Text>
+            <Text style={styles.progressLabelText}>
+            {songStatus ? (
+                `${Math.floor(songStatus.durationMillis / 1000 / 60)}:${String(Math.floor(songStatus.durationMillis / 1000 % 60)).padStart(2,"0")}`
+                ) : "00:00"}
+            </Text>
           </View>
         </View>
 
         <View style={styles.musicControlsContainer}>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={skipToPrevious}>
             <Ionicons name='play-skip-back-outline' size={35} color='#FFD369' />
           </TouchableOpacity>
           <TouchableOpacity onPress={handlePlayPause}>
             <Ionicons name={isPlaying ? 'pause-circle' : 'play-circle'} size={75} color='#FFD369' />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={skipToNext}>
             <Ionicons name='play-skip-forward-outline' size={35} color='#FFD369' />
           </TouchableOpacity>
         </View>
@@ -156,8 +216,8 @@ export default function App() {
           <TouchableOpacity>
             <Ionicons name='heart-outline' size={30} color="#888888" />
           </TouchableOpacity>
-          <TouchableOpacity>
-            <Ionicons name='repeat' size={30} color="#888888" />
+          <TouchableOpacity onPress={() => { repeat(!isLooping) }}>
+            <Ionicons name='repeat' size={30} color={isLooping ? "#ffffff" : "#888888"} />
           </TouchableOpacity>
           <TouchableOpacity>
             <Ionicons name='share-outline' size={30} color="#888888" />
@@ -242,7 +302,7 @@ const styles = StyleSheet.create({
   progressLevelDuration: {
     width: 340,
     flexDirection: 'row',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
   },
   progressLabelText: {
     color: '#fff',
@@ -254,5 +314,5 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '60%',
     marginVertical: 25,
-  }
+  },
 });
